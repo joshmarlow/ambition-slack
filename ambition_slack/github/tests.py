@@ -8,7 +8,7 @@ from mock import patch
 
 from ambition_slack.github.models import GithubUser
 from ambition_slack.slack.models import SlackUser
-from ambition_slack.github.views import GithubView
+from ambition_slack.github.views import GithubPayload, GithubView
 
 
 class GithubViewTest(TestCase):
@@ -40,6 +40,42 @@ class ModelsTest(TransactionTestCase):
         self.assertEquals(slack_user.__unicode__(), 'test_email')
 
 
+class GithubPayloadTests(TestCase):
+    def test_get_assignee_returns_none(self):
+        payload = {
+            'pull_request': {
+                'assignee': None,
+            },
+        }
+        self.assertEquals(None, GithubPayload(payload).assignee_login)
+
+    def test_get_assignee(self):
+        payload = {
+            'pull_request': {
+                'assignee': {
+                    'login': 'jodything',
+                },
+            },
+        }
+        self.assertEqual('jodything', GithubPayload(payload).assignee_login)
+
+    def test_get_sender_login_returns_none(self):
+        payload = {
+            'sender': {
+                'login': None,
+            },
+        }
+        self.assertEquals(None, GithubPayload(payload).sender_login)
+
+    def test_get_sender_login(self):
+        payload = {
+            'sender': {
+                'login': 'jodything',
+            },
+        }
+        self.assertEqual('jodything', GithubPayload(payload).sender_login)
+
+
 # ___________View Tests_______________
 
 class TestGithubViews(TestCase):
@@ -54,19 +90,6 @@ class TestGithubViews(TestCase):
         response = self.client.get('/github/')
         self.assertEqual(response.content, 'Github')
 
-    def test_no_get_assignee(self):
-        payload = {'pull_request': {'assignee': None}}
-        self.assertEquals(None, GithubView().get_assignee(payload))
-
-    def test_get_assignee_no_github_user(self):
-        payload = {'pull_request': {'assignee': {'login': 'jodything'}}}
-        self.assertEqual(None, GithubView().get_assignee(payload))
-
-    def test_get_assignee_w_github_user(self):
-        github_user = G(GithubUser, username='jodything')
-        payload = {'pull_request': {'assignee': {'login': 'jodything'}}}
-        self.assertEqual(github_user, GithubView().get_assignee(payload))
-
     def test_handle_pull_request_repo_action_no_call(self):
         G(
             GithubUser, username='jodything',
@@ -74,7 +97,7 @@ class TestGithubViews(TestCase):
         payload = {'sender': {'login': 'jodything'},
                    'pull_request': {'assignee': {'login': 'jodything'}},
                    'action': None}
-        self.assertFalse(None, GithubView().handle_pull_request_repo_action(payload))
+        self.assertFalse(None, GithubView().handle_pull_request_repo_action(GithubPayload(payload)))
 
     @patch('ambition_slack.github.views.slack', spec_set=True)
     def test_post_pull_request_action_opened_assigned(self, slack):
